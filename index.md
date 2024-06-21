@@ -35,7 +35,6 @@ For your final milestone, explain the outcome of your project. Key details to in
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/y3VAmNlER5Y" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 
-For your second milestone, explain what you've worked on since your previous milestone. You can highlight:
 - I've accomplished a lot since the first milestone. I was able to get the ultrasonic sensors to work and completed the entirety of the pi camera image processing to take pictures of the ball and be able to calculate the area and center of it. I also got the motors to run forward, backward, left, and right with the ability to stop them at any time. So far, what was surprising is how easy it is to be able to get things to work when you get an in-depth knowledge of what you are actually doing and how it all connects. Some of the challenges were one of the motors breaking, an ultrasonic sensor or two not working, and a whole lot of bugs during coding. I need to complete mounting all the components onto the car and make final adjustments to the final script. I also need to run through a few test runs and see what could be improved or if it's working at all.
 - 
 # First Milestone
