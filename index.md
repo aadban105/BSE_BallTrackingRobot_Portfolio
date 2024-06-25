@@ -22,12 +22,7 @@ You should comment out all portions of your portfolio that you have not complete
 <iframe width="560" height="315" src="https://www.youtube.com/embed/F7M7imOVGug" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
 
 For your final milestone, explain the outcome of your project. Key details to include are:
-- What you've accomplished since your previous milestone
-- What your biggest challenges and triumphs were at BSE
-- A summary of key topics you learned about
-- What you hope to learn in the future after everything you've learned at BSE
-
-
+I've wrapped up the last few steps for my project which includes coding the entire final script for the robot and mounting everything on the robot. I'm still waiting for a Pi camera to arrive since the one I was using broke, and then I will be able to do some test runs and ensure it works. The biggest challenges were learning a lot of how things like the Raspberry Pi, breadboard, wiring, and h-bridge work since I've barely ever worked with those before. Some parts also broke/stopped working and incorrect wiring that caused certain components to stop working which took a while to debug. With those challenges, there were also overcoming them and triumphing. Some of my triumphs were getting several components to work and being able to move on to the next step like the picamera image processing, ultrasonic sensors, and motors. Hopefully, I'll be able to achieve the best accomplishment, which is to get the entire robot to function and do what it's supposed to properly. I hope to learn even more in-depth about robotics/engineering/programming and learn new, more advanced things that we did at BSE using the basic knowledge I've gained from this program.
 
 # Second Milestone
 
