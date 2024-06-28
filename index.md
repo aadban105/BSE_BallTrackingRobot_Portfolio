@@ -56,7 +56,272 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Hello World!");
 }
+from picamera2.encoders import H264Encoder
+import time
+import cv2 #OpenCV
+from picamera2 import Picamera2
+import numpy as np
+import RPi.GPIO as GPIO
+import sys
+from gpiozero import DistanceSensor
 
+sensor_proximity=10.1
+rerouting_proximity=17.5
+
+lower_range= 180
+upper_range= 1740
+#ultraosnicsensors
+GPIO.setmode(GPIO.BCM)
+
+GPIO_TRIGGER1=26              #ultrasonicsensor1 right
+GPIO_ECHO1 = 12
+
+GPIO_TRIGGER2=6               #ultraosnicsensor2 middle
+GPIO_ECHO2=5
+
+GPIO_TRIGGER3=11              #ultraosnicsensor3 left
+GPIO_ECHO3=9
+
+def sonar(GPIO_TRIGGER,GPIO_ECHO):
+    start=0                     
+    stop=0
+    # Set pins as output and input
+    GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # Trigger
+    GPIO.setup(GPIO_ECHO,GPIO.IN)    # Echo
+     
+    # Set trigger to False (Low)
+    GPIO.output(GPIO_TRIGGER, False)
+     
+    # Allow module to settle
+    time.sleep(0.01)
+         
+    #while distance > 5:
+    #Send 10us pulse to trigger
+    GPIO.output(GPIO_TRIGGER, True)
+    time.sleep(0.00001)
+    GPIO.output(GPIO_TRIGGER, False)
+    begin = time.time()
+    while GPIO.input(GPIO_ECHO)==0 and time.time()<begin+0.05:
+        start = time.time()
+     
+    while GPIO.input(GPIO_ECHO)==1 and time.time()<begin+0.1:
+        stop = time.time()
+     
+    # Calculate pulse length
+    elapsed = stop-start
+    
+    # Distance pulse traveled in that time is time multiplied by the speed of sound (cm/s)
+    distance = elapsed * 34300
+     
+    # That was the distance there and back, so take half of the value
+    distance = distance / 2
+
+    # Reset GPIO settings, return distance (in cm) appropriate for robot movements 
+    return distance
+
+
+
+#motors
+MOTOR1B=15
+MOTOR1E=17
+
+
+MOTOR2B=18
+MOTOR2E=16
+
+picam2 = Picamera2()
+       
+camera_config=picam2.create_still_configuration(main={"size":(1920,1080)}, lores={"size":(480,270)},display="lores")
+       
+picam2.configure(camera_config)
+
+GPIO.setup([MOTOR1B,MOTOR1E,MOTOR2B,MOTOR2E],GPIO.OUT)
+# Set pins as output and input
+GPIO.setup(GPIO_TRIGGER1,GPIO.OUT)  # Trigger1
+GPIO.setup(GPIO_ECHO1,GPIO.IN)      # Echo1
+GPIO.setup(GPIO_TRIGGER2,GPIO.OUT)  # Trigger2
+GPIO.setup(GPIO_ECHO2,GPIO.IN)      # Echo2
+GPIO.setup(GPIO_TRIGGER3,GPIO.OUT)  # Trigger3
+GPIO.setup(GPIO_ECHO3,GPIO.IN)      # Echo3
+
+#Set triggers to false(999999(Low)
+GPIO.output(GPIO_TRIGGER1, False)
+GPIO.output(GPIO_TRIGGER2, False)
+GPIO.output(GPIO_TRIGGER3, False)
+
+
+GPIO.setup(MOTOR1B, GPIO.OUT)
+GPIO.setup(MOTOR1E, GPIO.OUT)
+
+GPIO.setup(MOTOR2B, GPIO.OUT)
+GPIO.setup(MOTOR2E, GPIO.OUT)
+
+#Defining functions for the motors to move
+def forward():
+    GPIO.output(MOTOR1B, GPIO.HIGH)
+    GPIO.output(MOTOR1E, GPIO.LOW)
+    GPIO.output(MOTOR2B, GPIO.HIGH)
+    GPIO.output(MOTOR2E, GPIO.LOW)
+         
+def reverse():
+    GPIO.output(MOTOR1B, GPIO.LOW)
+    GPIO.output(MOTOR1E, GPIO.HIGH)
+    GPIO.output(MOTOR2B, GPIO.LOW)
+    GPIO.output(MOTOR2E, GPIO.HIGH)
+     
+def rightturn():
+    GPIO.output(MOTOR1B,GPIO.LOW)
+    GPIO.output(MOTOR1E,GPIO.HIGH)
+    GPIO.output(MOTOR2B,GPIO.HIGH)
+    GPIO.output(MOTOR2E,GPIO.LOW)
+     
+def leftturn():
+    GPIO.output(MOTOR1B,GPIO.HIGH)
+    GPIO.output(MOTOR1E,GPIO.LOW)
+    GPIO.output(MOTOR2B,GPIO.LOW)
+    GPIO.output(MOTOR2E,GPIO.HIGH)
+
+def stop():
+    GPIO.output(MOTOR1E,GPIO.LOW)
+    GPIO.output(MOTOR1B,GPIO.LOW)
+    GPIO.output(MOTOR2E,GPIO.LOW)
+    GPIO.output(MOTOR2B,GPIO.LOW)
+      
+def sharp_left():
+    GPIO.output(MOTOR1B,GPIO.LOW)
+    GPIO.output(MOTOR1E,GPIO.HIGH)
+    GPIO.output(MOTOR2B,GPIO.HIGH)
+    GPIO.output(MOTOR2E,GPIO.LOW)
+    
+def sharp_right():
+    GPIO.output(MOTOR1B,GPIO.HIGH)
+    GPIO.output(MOTOR1E,GPIO.LOW)
+    GPIO.output(MOTOR2B,GPIO.LOW)
+    GPIO.output(MOTOR2E,GPIO.HIGH)
+    
+def segment_colour(frame):   
+    hsv_roi =  cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+    test=cv2.medianBlur(hsv_roi,3)
+    mask_1 = cv2.inRange(test, np.array([150, 140,1]), np.array([190,255,255])) 
+    cv2.imshow('mask_1', mask_1)
+    mask = mask_1 
+    kern_dilate = np.ones((12,12),np.uint8)
+    kern_erode  = np.ones((6,6),np.uint8)
+    mask= cv2.erode(mask,kern_erode)    
+    mask=cv2.dilate(mask,kern_dilate)     
+    (h,w) = mask.shape
+    cv2.imshow('mask', mask) 
+    
+    return mask
+
+def find_blob(blob): 
+    largest_contour=0
+    cont_index=0
+    contours, hierarchy = cv2.findContours(blob, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    for idx, contour in enumerate(contours):
+        area=cv2.contourArea(contour)
+        if (area >largest_contour) :
+            largest_contour=area
+            cont_index=idx
+                    
+    r=(0,0,2,2)
+    if len(contours) > 0:
+        r = cv2.boundingRect(contours[cont_index])
+        
+     
+    return r,largest_contour
+
+def no_obstacle(distanceC,distanceL,distanceR): #TRUE: no obstacles within 10 cm of sensor, FALSE: obstacle
+        
+    if distanceC>sensor_proximity and distanceR>sensor_proximity and distanceL>sensor_proximity:
+       return True
+    else:
+       return False
+    
+#Camera capture
+
+#camera = cv2.VideoCapture(0)
+       
+#camera.set(3,320)
+       
+       
+#picam2.start_preview(Preview.QTGL) #display the video
+       
+picam2.start()
+       
+time.sleep(2)
+       
+flag=0#Searching:0:left turn for last location of ball, 1 for right term
+       
+flag_reroute=-1#Reroute searching
+
+found=0
+       
+while(True):
+    im = picam2.capture_array()
+    height = im.shape[0]
+    width = im.shape[1]
+    #cv2.imshow('file1.png', im)
+    global center_x
+    global center_y
+    center_x=0.
+    center_y=0.
+    distanceR = sonar(GPIO_TRIGGER1,GPIO_ECHO1)
+    distanceC = sonar(GPIO_TRIGGER2,GPIO_ECHO2)
+    distanceL = sonar(GPIO_TRIGGER3,GPIO_ECHO3)
+    print("dL, dC, dR ", distanceL//1, distanceC//1, distanceR//1)
+    hsv1 = cv2.cvtColor(im, cv2.COLOR_RGB2HSV)
+    mask_red=segment_colour(im[:,:,[0,1,2]])
+    #cv2.imshow('frame', mask_red)
+    #Masking red the frame
+    loct,area=find_blob(mask_red)
+    x,y,w,h=loct 
+    #center_x=x+((w)/2)
+    #center_y=y+((h)/2)
+    print(area)
+    print(found)
+       
+    if (w*h)<20000:
+            #If the width and height is really small, that means it can't find the ball
+        found=0
+    else:
+            #This means it has found the ball
+        found=1
+            #Creates the rectangle so we can get the center x value and center y value
+            #This helps us track it better
+        simg2 = cv2.rectangle(im,(x,y),(x+w,y+h),255,2)
+        center_x=x+w/2
+        center_y=y+((h)/2)
+        print("Center is:",center_x,center_y)
+        cv2.circle(im,(int(center_x),int(center_y)),3,(0,110,255),-1)
+
+
+    initial=2000000
+
+    if((area<initial) and (found==1)):
+        print("Ball is found")
+        print(no_obstacle(distanceL,distanceC,distanceR))
+        if no_obstacle(distanceL,distanceC,distanceR):
+            if(center_x<lower_range):
+                flag=0
+                rightturn()
+                print("leftturn")
+                time.sleep(0.05)
+            elif (center_x>upper_range):
+                flag=1
+                leftturn()
+                print("rightturn")
+                time.sleep(0.05)
+            else:
+                forward()
+                print("forward")
+                time.sleep(0.05)
+    else:
+        stop()
+        time.sleep(0.005)
+        if ((distanceC < sensor_proximity) and (area>=1500000)):
+            stop()
+            time.sleep(0.005)
 void loop() {
   // put your main code here, to run repeatedly:
 
@@ -75,7 +340,7 @@ Don't forget to place the link of where to buy each component inside the quotati
 | Wires | Thw wires itself connecting battery, motors, raspberry pi to breadboard | $12.5 | <a href="https://www.amazon.com/SIM-NAT-Breadboard-Arduino-Raspberry/dp/B07RX78T9L/ref=sr_1_5?crid=19OD2B6R7STLK&dib=eyJ2IjoiMSJ9.ZmpXiA1DmDoLssuQVlmgV33pDDn98oQdkqWEkd4GjmtQbxgPywu-zvVmlLYiVuZN7DQyZ7Xx_2KiEaiI6s0stm3eeAVGqslBbvhCDvbfrCdJpE1LYFw3HTXSbLru7I-gpi-wINt-jDT03qRk86DRUysRUDdlxgZ8231ta9-mq25jTygdqFOWh_tF8OgCYw7nhZjcVcZyWXEJ1fDyDderUkbVZCJUtPK2OOzZm0zN7tQ.z504ABAoZT5eNWPkr0XmRtpDaIEBM-9WOTBVTy_9wa0&dib_tag=se&keywords=wires+kit+for+raspberry+pi&qid=1718383544&sprefix=wires+kit+for+raspbaerry+pi%2Caps%2C180&sr=8-5"> Link </a> |
 | H-Bridge Set| Connecting motors to breadboard,which connects to raspberry pi & battery | $9 | <a href="https://www.amazon.com/HiLetgo-Controller-Stepper-H-Bridge-Mega2560/dp/B07BK1QL5T/ref=sr_1_3?crid=QAC1LIBMFWG1&dib=eyJ2IjoiMSJ9.1NQtb_sWjrkCYw5IyjS8yVwr-fv72tK_yJsFj88l2drtLD4wveRySqaN9YpznGLwcugcjSV3m4qsiRuywvcyGlH5AbpIbvnuXCt_9qdWuBN3-1sBhEhNeQOSl4Q0nFOSo2ngRuX_ZxGFcHCU3BitVqx7yI09eDlz4bB4muYKX9IUaVkWGtXwacEMJ0_Vl9QgHmP1bb6nUnrB5X1zaLNJmKWoGDWnGYTpFiaT_sSTUVOhrc6KoDuHtemn3C_wQUigvCkp59LyIoMpxWknIVToB07VrttxGX0WbvcHsjYiAzc.UVAU3J_69T7X3LpinDoAsBOAeoDtP50lKM-XLWCoFzU&dib_tag=se&keywords=h-bridge+motor+set&qid=1718383652&sprefix=h-bridge+motor+set%2Caps%2C161&sr=8-3"> Link </a> |
 | Energizer Non-rechargeable Battery Pack | Powering the motors | $9 | <a href="https://www.amazon.com/Energizer-Ultimate-Lithium-AA-Batteries/dp/B008OII4TY"> Link </a> |
-
+| Ultrasonic sensors | Detecting distance between car and ball | $9 | <a href="["](https://www.amazon.com/Organizer-Ultrasonic-Distance-MEGA2560-ElecRight/dp/B07RGB4W8V/ref=sr_1_11?asc_source=01H8HFYCS1MWCPQSJYRR7EWW12&crid=2UILRK8AIBOYP&dib=eyJ2IjoiMSJ9.hxKSGnm38uFYPbLd-yrIsAwtxyRhETnroFHfs4vAAJNUM_kIEuR-nuF7-zrx6y7HTcehmQa5c-zSOroOyhP6BSMitoYHhl7aItvKPuH_1_-VpL5MOC4LZI3bXoahUHZoq62JEehgre2XBi1HZzq5OBky4eTgane4rNZvKn5hizH14nxcxUzec_t6_BZ-OzKSPbG9xr4En_DPghFmAxh_ywgEl6YPahX9gAItQ9j9Z9A.gQX575YLLnN5W5kK6GYpAVAgBQZNCFtzP0s-0F89CwM&dib_tag=se&keywords=ultrasonic+sensor&qid=1719595462&sprefix=ultrasonic+sensor%2Caps%2C189&sr=8-11&tag=namespacebran691-20)> Link </a> |
 
 # Other Resources/Examples
 One of the best parts about Github is that you can view how other people set up their own work. Here are some past BSE portfolios that are awesome examples. You can view how they set up their portfolio, and you can view their index.md files to understand how they implemented different portfolio components.
